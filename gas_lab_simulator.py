@@ -25,32 +25,64 @@ clock = pygame.time.Clock()
 # Initialize pygame_gui
 manager = pygame_gui.UIManager((width + 300, height))
 
+# Side panel layout
+panel_x = width + 10
+panel_y = 10
+slider_width = 280
+slider_height = 20
+label_height = 30
+
 # Sliders for controlling particles, temperature, and container size
 particle_slider = pygame_gui.elements.UIHorizontalSlider(
-    relative_rect=pygame.Rect((width + 10, 40), (280, 20)),
+    relative_rect=pygame.Rect((panel_x, panel_y + label_height), (slider_width, slider_height)),
     start_value=num_particles,
-    value_range=(10, 500),  # min_value and max_value are passed as a tuple
+    value_range=(10, 500),
     manager=manager
 )
 
 temperature_slider = pygame_gui.elements.UIHorizontalSlider(
-    relative_rect=pygame.Rect((width + 10, 100), (280, 20)),
+    relative_rect=pygame.Rect((panel_x, panel_y + 2 * label_height + slider_height), (slider_width, slider_height)),
     start_value=temperature,
-    value_range=(100, 500),  # min_value and max_value are passed as a tuple
+    value_range=(100, 500),
     manager=manager
 )
 
 width_slider = pygame_gui.elements.UIHorizontalSlider(
-    relative_rect=pygame.Rect((width + 10, 160), (280, 20)),
+    relative_rect=pygame.Rect((panel_x, panel_y + 3 * label_height + 2 * slider_height), (slider_width, slider_height)),
     start_value=width,
-    value_range=(400, 1000),  # min_value and max_value are passed as a tuple
+    value_range=(400, 1000),
     manager=manager
 )
 
 height_slider = pygame_gui.elements.UIHorizontalSlider(
-    relative_rect=pygame.Rect((width + 10, 220), (280, 20)),
+    relative_rect=pygame.Rect((panel_x, panel_y + 4 * label_height + 3 * slider_height), (slider_width, slider_height)),
     start_value=height,
-    value_range=(300, 800),  # min_value and max_value are passed as a tuple
+    value_range=(300, 800),
+    manager=manager
+)
+
+# Labels for sliders
+particle_label = pygame_gui.elements.UILabel(
+    relative_rect=pygame.Rect((panel_x, panel_y), (slider_width, label_height)),
+    text="Number of Particles",
+    manager=manager
+)
+
+temperature_label = pygame_gui.elements.UILabel(
+    relative_rect=pygame.Rect((panel_x, panel_y + label_height + slider_height), (slider_width, label_height)),
+    text="Temperature (K)",
+    manager=manager
+)
+
+width_label = pygame_gui.elements.UILabel(
+    relative_rect=pygame.Rect((panel_x, panel_y + 2 * (label_height + slider_height)), (slider_width, label_height)),
+    text="Container Width",
+    manager=manager
+)
+
+height_label = pygame_gui.elements.UILabel(
+    relative_rect=pygame.Rect((panel_x, panel_y + 3 * (label_height + slider_height)), (slider_width, label_height)),
+    text="Container Height",
     manager=manager
 )
 
@@ -72,7 +104,7 @@ def draw_speed_distribution(particles):
     raw_data = np.asarray(buf)
     plt.close(fig)
     surface = pygame.image.frombuffer(raw_data, canvas.get_width_height(), 'RGBA')
-    return pygame.transform.scale(surface, (300, 300))
+    return pygame.transform.scale(surface, (280, 280))
 
 # Function to handle particle-wall collisions
 def handle_wall_collisions(particle, width, height):
@@ -90,6 +122,9 @@ particles = [
     for _ in range(num_particles)
 ]
 
+# Initialize histogram
+histogram = draw_speed_distribution(particles)
+
 while running:
     time_delta = clock.tick(60) / 1000.0  # Time in seconds since last tick
     for event in pygame.event.get():
@@ -100,8 +135,8 @@ while running:
     # Update variables from sliders
     num_particles = int(particle_slider.get_current_value())
     temperature = int(temperature_slider.get_current_value())
-    width = int(width_slider.get_current_value())
-    height = int(height_slider.get_current_value())
+    new_width = int(width_slider.get_current_value())
+    new_height = int(height_slider.get_current_value())
 
     # Recalculate particle speed based on updated temperature
     particle_speed = np.sqrt(3 * k_B * temperature / particle_mass)
@@ -115,8 +150,18 @@ while running:
     while len(particles) > num_particles:
         particles.pop()
 
+    # Adjust container size and reposition particles if necessary
+    if new_width != width or new_height != height:
+        width, height = new_width, new_height
+        screen = pygame.display.set_mode((width + 300, height))
+        for particle in particles:
+            particle["pos"] = np.array([np.random.uniform(0, width), np.random.uniform(0, height)])
+
     # Clear the screen
     screen.fill((0, 0, 0))
+
+    # Draw simulation area border
+    pygame.draw.rect(screen, (255, 255, 255), (0, 0, width, height), 2)
 
     # Update particle positions and draw them
     for particle in particles:
@@ -129,14 +174,14 @@ while running:
 
     # Side panel for data
     pygame.draw.rect(screen, (50, 50, 50), (width, 0, 300, height))  # Side panel background
-    screen.blit(font.render(f"Temperature: {temperature} K", True, (255, 255, 255)), (width + 10, 20))
-    screen.blit(font.render(f"Particles: {len(particles)}", True, (255, 255, 255)), (width + 10, 50))
-    screen.blit(font.render(f"Pressure: {pressure:.2e} Pa", True, (255, 255, 255)), (width + 10, 80))
+    screen.blit(font.render(f"Temperature: {temperature} K", True, (255, 255, 255)), (panel_x, panel_y))
+    screen.blit(font.render(f"Particles: {len(particles)}", True, (255, 255, 255)), (panel_x, panel_y + label_height + slider_height))
+    screen.blit(font.render(f"Pressure: {pressure:.2e} Pa", True, (255, 255, 255)), (panel_x, panel_y + 2 * (label_height + slider_height)))
 
-    # Update histogram every 10 frames
-    if frame_count % 10 == 0:
+    # Update histogram every 20 frames
+    if frame_count % 20 == 0:
         histogram = draw_speed_distribution(particles)
-    screen.blit(histogram, (width + 10, 120))
+    screen.blit(histogram, (panel_x, panel_y + 4 * (label_height + slider_height)))
 
     manager.update(time_delta)
     manager.draw_ui(screen)
